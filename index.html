@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video to Audio Converter</title>
+    <style>
+        /* Basic Reset */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; background: #f5f7fa; color: #333; padding: 20px; }
+        #app-container { max-width: 800px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 30px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); }
+        h2, h3 { color: #1a73e8; margin-bottom: 15px; font-weight: 600; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 500; margin-bottom: 8px; color: #444; }
+        input[type="file"], button { font-size: 16px; }
+        input[type="file"] { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; }
+        .error-message { color: #d32f2f; font-size: 14px; margin-top: 5px; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+        .hidden { display: none; }
+        .button-primary { background: #1a73e8; color: #fff; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 500; transition: background 0.3s; }
+        .button-primary:hover { background: #1557b0; }
+        .button-primary:disabled { background: #b0bec5; cursor: not-allowed; }
+        .button-secondary { background: #f1f3f4; color: #333; border: 1px solid #ddd; padding: 10px 20px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: background 0.3s; }
+        .button-secondary:hover { background: #e8eaed; }
+        .video-preview-card { background: #fafafa; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #eee; }
+        .audio-meta p { margin: 5px 0; font-size: 14px; }
+        .audio-player-wrapper { margin-top: 15px; }
+        .audio-controls-bar { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 10px; }
+        .control-button { background: none; border: none; cursor: pointer; padding: 8px; }
+        .control-button svg { display: block; }
+        .time-display { font-size: 14px; color: #555; }
+        fieldset { border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .fieldset-legend { font-weight: 500; color: #444; padding: 0 10px; }
+        #format-options div { margin: 10px 0; }
+        .warning { background: #fff3e0; color: #e65100; padding: 12px; border-radius: 8px; margin: 15px 0; font-size: 14px; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #1a73e8; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        progress { width: 100%; height: 10px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div id="app-container" aria-live="polite">
+        <section id="upload-section" aria-labelledby="app-main-title">
+            <h2 id="app-main-title" class="section-title">Transform Your Video into High-Quality Audio</h2>
+            <div id="videoFileUploadGroup" class="form-group">
+                <label for="videoFile">Select Your Video File:</label>
+                <input type="file" id="videoFile" name="videoFile" accept="video/mp4,video/x-matroska,.mp4,.mkv" aria-describedby="file-instructions file-error" aria-required="true">
+                <p id="file-instructions" class="sr-only">Select an MP4 or MKV video file to extract audio.</p>
+                <p id="file-error" class="error-message" role="alert" aria-live="assertive"></p>
+            </div>
+            <button id="replaceFileBtn" type="button" class="button-secondary replace-file-btn hidden">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"></path></svg>
+                Choose Another Video
+            </button>
+            <div id="videoPreviewContainer" class="video-preview-card hidden">
+                <h3 id="audioPreviewHeading" class="preview-title" tabindex="-1">Audio Preview</h3>
+                <div id="audioFileInfo" class="audio-meta">
+                    <p><strong>File:</strong> <span id="videoPreviewFilename"></span></p>
+                    <p><strong>Duration:</strong> <span id="videoPreviewDuration"></span></p>
+                </div>
+                <div class="audio-player-wrapper">
+                    <audio id="audioPreviewPlayer" aria-describedby="audioFileInfo"></audio>
+                    <div id="audioControlsBar" class="audio-controls-bar">
+                        <button id="rewindPreviewBtn" class="control-button" aria-label="Rewind 10 seconds"><svg aria-hidden="true"></svg></button>
+                        <button id="replayPreviewBtn" class="control-button" aria-label="Replay Preview"><svg aria-hidden="true"></svg></button>
+                        <button id="playPausePreviewBtn" class="control-button" aria-label="Play Preview"><svg aria-hidden="true"></svg><span id="playPauseText">Play</span></button>
+                        <button id="forwardPreviewBtn" class="control-button" aria-label="Forward 10 seconds"><svg aria-hidden="true"></svg></button>
+                        <div class="time-display" aria-live="off">
+                            <span id="currentPreviewTime">00:00</span> / <span id="totalPreviewTime">00:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <fieldset class="form-group">
+                <legend class="fieldset-legend">Select Your Desired Audio Format:</legend>
+                <div id="format-options" role="radiogroup" aria-labelledby="format-legend-sr">
+                    <span id="format-legend-sr" class="sr-only">Choose your preferred audio output format.</span>
+                    <div><input type="radio" id="formatWav" name="audioFormat" value="wav" checked> <label for="formatWav">WAV (Uncompressed, Studio-Quality Sound)</label></div>
+                    <div><input type="radio" id="formatMp3" name="audioFormat" value="mp3"> <label for="formatMp3">MP3 (128 KBPs, Compact, High-Quality Audio)</label></div>
+                </div>
+            </fieldset>
+            <p id="mainWarning" class="warning" role="status">Note: Large video files may require additional processing time. All conversions are securely performed in your browser.</p>
+            <button id="convertToAudioBtn" type="button" class="button-primary" disabled>Extract Audio Now</button>
+        </section>
+        <section id="processing-section" class="hidden" aria-labelledby="processing-heading-main" aria-live="assertive" aria-busy="true">
+            <h2 id="processing-heading-main" class="section-title">Converting Your Video...</h2>
+            <p id="processing-status-text">Your audio is being extracted. Please wait while we process your file securely in your browser.</p>
+            <div class="spinner" aria-hidden="true">
+                <span class="sr-only">Processing</span>
+            </div>
+            <progress id="conversion-progress" value="0" max="100" aria-label="Conversion progress"></progress>
+        </section>
+        <section id="result-section" class="hidden" aria-labelledby="result-heading-main">
+            <h2 id="result-heading-main" class="section-title">Your Audio is Ready!</h2>
+            <p id="download-status" aria-live="polite">Your audio file should download automatically. If it doesn’t, click the button below.</p>
+            <p id="generated-filename-container">Converted File: <strong id="generated-filename"></strong></p>
+            <button id="downloadAudioBtn" type="button" class="button-secondary">Download Your Audio</button>
+            <button id="convertAnotherBtn" type="button" class="button-secondary">Extract Audio from Another Video</button>
+        </section>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Element Selections ---
+            const uploadSection = document.getElementById('upload-section');
+            const processingSection = document.getElementById('processing-section');
+            const resultSection = document.getElementById('result-section');
+            const videoFileInput = document.getElementById('videoFile');
+            const videoFileUploadGroup = document.getElementById('videoFileUploadGroup');
+            const replaceFileBtn = document.getElementById('replaceFileBtn');
+            const convertToAudioBtn = document.getElementById('convertToAudioBtn');
+            const downloadAudioBtn = document.getElementById('downloadAudioBtn');
+            const convertAnotherBtn = document.getElementById('convertAnotherBtn');
+            const fileError = document.getElementById('file-error');
+            const downloadStatus = document.getElementById('download-status');
+            const generatedFilenameDisplay = document.getElementById('generated-filename');
+            const processingStatusText = document.getElementById('processing-status-text');
+            const conversionProgress = document.getElementById('conversion-progress');
+            const processingHeading = processingSection.querySelector('h2');
+            const resultHeading = resultSection.querySelector('h2');
+            const mainWarningParagraph = document.getElementById('mainWarning');
+            const videoPreviewContainer = document.getElementById('videoPreviewContainer');
+            const audioPreviewHeading = document.getElementById('audioPreviewHeading');
+            const audioFileInfo = document.getElementById('audioFileInfo');
+            const videoPreviewFilename = document.getElementById('videoPreviewFilename');
+            const videoPreviewDuration = document.getElementById('videoPreviewDuration');
+            const audioPreviewPlayer = document.getElementById('audioPreviewPlayer');
+            const audioControlsBar = document.getElementById('audioControlsBar');
+            const playPausePreviewBtn = document.getElementById('playPausePreviewBtn');
+            const playPauseText = document.getElementById('playPauseText');
+            const rewindPreviewBtn = document.getElementById('rewindPreviewBtn');
+            const forwardPreviewBtn = document.getElementById('forwardPreviewBtn');
+            const replayPreviewBtn = document.getElementById('replayPreviewBtn');
+            const currentPreviewTimeDisplay = document.getElementById('currentPreviewTime');
+            const totalPreviewTimeDisplay = document.getElementById('totalPreviewTime');
+
+            // --- State Variables ---
+            let originalFilename = '';
+            let originalFilenameWithoutExt = '';
+            let targetFormat = 'wav';
+            let lastFocusedElementBeforeProcessing = null;
+            let convertedAudioBlob = null;
+            let currentGlobalProgress = 0;
+            let currentVideoObjectURL = null;
+
+            // --- SVG Icons ---
+            const ICONS = {
+                PLAY: '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M8 5v14l11-7L8 5z"></path></svg>',
+                PAUSE: '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>',
+                REPLAY: '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 5V1L7 6l5.5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"></path></svg>',
+                REWIND_10: '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M11.37 12.59c-.17-.1-.36-.16-.57-.16h-.8V9.84c0-.41-.34-.75-.75-.75s-.75.34-.75.75v3.35c0 .41.34.75.75.75h.8c.21 0 .4-.06.57-.16.33-.19.53-.54.53-.91s-.2-.72-.53-.91zm-2.25-1.34H7.87c-.41 0-.75.34-.75.75s.34.75.75.75h1.25v1.14c0 .41.34.75.75.75s.75-.34.75-.75V12c0-.41-.34-.75-.75-.75zm5.88-1.34c-.17-.1-.36-.16-.57-.16h-.8V9.84c0-.41-.34-.75-.75-.75s-.75.34-.75.75v3.35c0 .41.34.75.75.75h.8c.21 0 .4-.06.57-.16.33-.19.53-.54.53-.91s-.2-.72-.53-.91zm-2.25-1.34h-1.25c-.41 0-.75.34-.75.75s.34.75.75.75h1.25v1.14c0 .41.34.75.75.75s.75-.34.75-.75V12c0-.41-.34-.75-.75-.75zm-1 6.09V7.41c0-.89-1.08-1.34-1.71-.71L6.29 11.29c-.39.39-.39 1.02 0 1.41l4.01 4.01c.62.63 1.7.19 1.7-.7zM12 19V5l8.5 7L12 19z"></path><text x="6" y="15.5" font-family="Arial, sans-serif" font-size="7" fill="currentColor" text-anchor="middle">10</text></svg>',
+                FORWARD_10: '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12.63 11.25c.17.1.36.16.57.16h.8v2.59c0 .41.34.75.75.75s.75-.34.75-.75V10.5c0-.41-.34-.75-.75-.75h-.8c-.21 0-.4.06.57-.16-.33.19-.53.54-.53.91s.2.72.53.91zm2.25 1.34h1.25c.41 0 .75-.34.75-.75s-.34-.75-.75-.75h-1.25V9.84c0-.41-.34-.75-.75-.75s-.75.34-.75.75v2.59c0 .41.34.75.75.75zm-5.88 1.34c.17.1.36.16.57.16h.8v2.59c0 .41.34.75.75.75s.75-.34.75-.75V10.5c0-.41-.34-.75-.75-.75h-.8c-.21 0-.4.06-.57.16-.33.19-.53.54-.53.91s.2.72.53.91zm-1-5.34v5.17c0 .89 1.08 1.34 1.71.71l4-4c.39-.39.39-1.02 0-1.41l-4-4c-.62-.63-1.7-.19-1.7.7zM12 5v14l8.5-7L12 5z"></path><text x="17.5" y="15.5" font-family="Arial, sans-serif" font-size="7" fill="currentColor" text-anchor="middle">10</text></svg>'
+            };
+
+            function setupPreviewPlayerIcons() {
+                playPausePreviewBtn.querySelector('svg').innerHTML = ICONS.PLAY;
+                rewindPreviewBtn.querySelector('svg').innerHTML = ICONS.REWIND_10;
+                forwardPreviewBtn.querySelector('svg').innerHTML = ICONS.FORWARD_10;
+                replayPreviewBtn.querySelector('svg').innerHTML = ICONS.REPLAY;
+            }
+
+            // --- Utility Functions ---
+            function getFileNameWithoutExtension(fullFileName) {
+                if (!fullFileName) return '';
+                const lastDotIndex = fullFileName.lastIndexOf('.');
+                if (lastDotIndex === -1 || lastDotIndex === 0) return fullFileName;
+                return fullFileName.substring(0, lastDotIndex);
+            }
+
+            function getSelectedFormat() {
+                const checkedRadio = document.querySelector('input[name="audioFormat"]:checked');
+                return checkedRadio ? checkedRadio.value : 'wav';
+            }
+
+            function validateInputs() {
+                fileError.textContent = '';
+                videoFileInput.removeAttribute('aria-invalid');
+                if (!videoFileInput.files || videoFileInput.files.length === 0) {
+                    fileError.textContent = 'Please select an MP4 or MKV video file to convert.';
+                    videoFileInput.setAttribute('aria-invalid', 'true');
+                    videoFileInput.focus();
+                    return false;
+                }
+                return true;
+            }
+
+            function formatTime(timeInSeconds, showHours = false) {
+                const totalSeconds = Math.floor(timeInSeconds);
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+                let formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                if (showHours || hours > 0) {
+                    formattedTime = `${String(hours).padStart(2, '0')}:${formattedTime}`;
+                }
+                return formattedTime;
+            }
+
+            function updateProgress(percentage, statusText = null) {
+                const roundedPercentage = Math.round(percentage);
+                currentGlobalProgress = roundedPercentage;
+                conversionProgress.value = roundedPercentage;
+                conversionProgress.style.display = (roundedPercentage > 0 && roundedPercentage < 100) ? 'block' : 'none';
+                conversionProgress.setAttribute('aria-valuenow', roundedPercentage);
+                if (statusText) {
+                    processingStatusText.textContent = statusText;
+                }
+            }
+
+            function yieldToEventLoop() {
+                return new Promise(resolve => setTimeout(resolve, 0));
+            }
+
+            // --- Audio Preview Handlers ---
+            function setupAudioPreview(file) {
+                if (currentVideoObjectURL) {
+                    URL.revokeObjectURL(currentVideoObjectURL);
+                }
+                currentVideoObjectURL = URL.createObjectURL(file);
+                audioPreviewPlayer.src = currentVideoObjectURL;
+                videoPreviewFilename.textContent = file.name;
+                originalFilename = file.name;
+                originalFilenameWithoutExt = getFileNameWithoutExtension(file.name);
+                audioPreviewPlayer.onloadedmetadata = () => {
+                    if (audioPreviewPlayer.duration === Infinity || isNaN(audioPreviewPlayer.duration)) {
+                        videoPreviewDuration.textContent = 'Unknown';
+                    } else {
+                        videoPreviewDuration.textContent = formatTime(audioPreviewPlayer.duration, true);
+                        totalPreviewTimeDisplay.textContent = formatTime(audioPreviewPlayer.duration);
+                    }
+                    videoPreviewContainer.classList.remove('hidden');
+                    convertToAudioBtn.disabled = false;
+                    audioPreviewHeading.focus();
+                };
+                audioPreviewPlayer.onerror = () => {
+                    fileError.textContent = 'Unable to load audio preview. The video may not have an audio track or is unsupported.';
+                    videoPreviewContainer.classList.add('hidden');
+                    convertToAudioBtn.disabled = true;
+                };
+                audioPreviewPlayer.ontimeupdate = () => {
+                    currentPreviewTimeDisplay.textContent = formatTime(audioPreviewPlayer.currentTime);
+                };
+                audioPreviewPlayer.onplay = () => {
+                    playPausePreviewBtn.querySelector('svg').innerHTML = ICONS.PAUSE;
+                    playPauseText.textContent = 'Pause';
+                };
+                audioPreviewPlayer.onpause = () => {
+                    playPausePreviewBtn.querySelector('svg').innerHTML = ICONS.PLAY;
+                    playPauseText.textContent = 'Resume';
+                };
+            }
+
+            // --- Core Audio Processing Functions ---
+            async function extractAudioBuffer(videoFile) {
+                currentGlobalProgress = 0;
+                updateProgress(currentGlobalProgress, 'Preparing video for audio extraction...');
+                const fileReader = new FileReader();
+                let readProgressInterval = setInterval(() => {
+                    if (currentGlobalProgress < 5) {
+                        currentGlobalProgress++;
+                        updateProgress(currentGlobalProgress, `Reading file: ${currentGlobalProgress * 20}%`);
+                    } else {
+                        clearInterval(readProgressInterval);
+                    }
+                }, 100);
+                return new Promise((resolve, reject) => {
+                    fileReader.onload = (e) => {
+                        clearInterval(readProgressInterval);
+                        currentGlobalProgress = Math.max(currentGlobalProgress, 5);
+                        updateProgress(currentGlobalProgress, 'Video data loaded, preparing metadata...');
+                        const videoFileUrl = e.target.result;
+                        const tempAudioEl = document.createElement('audio');
+                        tempAudioEl.preload = 'metadata';
+                        tempAudioEl.src = videoFileUrl;
+                        tempAudioEl.onloadedmetadata = async () => {
+                            currentGlobalProgress = Math.max(currentGlobalProgress, 10);
+                            updateProgress(currentGlobalProgress, 'Metadata loaded, preparing for fetch...');
+                            if (tempAudioEl.duration === Infinity || isNaN(tempAudioEl.duration) || tempAudioEl.duration === 0) {
+                                URL.revokeObjectURL(videoFileUrl);
+                                reject(new Error('Invalid video duration or no audio track. Cannot extract audio.'));
+                                return;
+                            }
+                            try {
+                                let fetchProgressInterval = setInterval(() => {
+                                    if (currentGlobalProgress < 20) {
+                                        currentGlobalProgress++;
+                                        updateProgress(currentGlobalProgress, `Fetching video data: ${Math.round(((currentGlobalProgress - 10) / 10) * 100)}%`);
+                                    } else {
+                                        clearInterval(fetchProgressInterval);
+                                    }
+                                }, 150);
+                                const response = await fetch(videoFileUrl);
+                                clearInterval(fetchProgressInterval);
+                                currentGlobalProgress = Math.max(currentGlobalProgress, 20);
+                                updateProgress(currentGlobalProgress, 'Video data fetched, preparing for decoding...');
+                                if (!response.ok) throw new Error(`Failed to fetch video data (status: ${response.status})`);
+                                const videoArrayBuffer = await response.arrayBuffer();
+                                URL.revokeObjectURL(videoFileUrl);
+                                let decodeProgress = currentGlobalProgress;
+                                let decodeTarget = 50;
+                                let decodeInterval = setInterval(() => {
+                                    if (decodeProgress < decodeTarget) {
+                                        decodeProgress += 2;
+                                        decodeProgress = Math.min(decodeProgress, decodeTarget);
+                                        updateProgress(decodeProgress, `Decoding audio data: ${Math.round(((decodeProgress - 20) / (decodeTarget - 20)) * 100)}%`);
+                                    } else {
+                                        clearInterval(decodeInterval);
+                                    }
+                                }, 100);
+                                const decodeAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                const decodedAudioBuffer = await decodeAudioContext.decodeAudioData(videoArrayBuffer);
+                                clearInterval(decodeInterval);
+                                decodeAudioContext.close();
+                                currentGlobalProgress = decodeTarget;
+                                updateProgress(currentGlobalProgress, 'Audio decoded. Preparing for encoding...');
+                                resolve(decodedAudioBuffer);
+                            } catch (error) {
+                                if (videoFileUrl && videoFileUrl.startsWith('blob:')) {
+                                    try { URL.revokeObjectURL(videoFileUrl); } catch (e) { console.warn("Error revoking object URL:", e); }
+                                }
+                                console.error("Error in fetch/decode strategy:", error);
+                                reject(new Error(`Error processing video audio: ${error.message}. This video format's audio might not be directly decodable by the browser.`));
+                            }
+                        };
+                        tempAudioEl.onerror = (err) => {
+                            if (videoFileUrl && videoFileUrl.startsWith('blob:')) {
+                                try { URL.revokeObjectURL(videoFileUrl); } catch (e) { console.warn("Error revoking object URL on audio error:", e); }
+                            }
+                            let errorMsg = 'Error loading video file for audio extraction. It might be corrupt, an unsupported format, or contain no audio track.';
+                            if (tempAudioEl.error) {
+                                switch (tempAudioEl.error.code) {
+                                    case MediaError.MEDIA_ERR_ABORTED: errorMsg = 'Video loading aborted.'; break;
+                                    case MediaError.MEDIA_ERR_NETWORK: errorMsg = 'A network error occurred while fetching the video.'; break;
+                                    case MediaError.MEDIA_ERR_DECODE: errorMsg = 'The video could not be decoded, or the format is not supported for audio extraction.'; break;
+                                    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: errorMsg = 'The video format (or its audio track) is not supported by your browser.'; break;
+                                    default: errorMsg = 'An unknown error occurred while loading the video for audio extraction.';
+                                }
+                            }
+                            reject(new Error(errorMsg));
+                        };
+                    };
+                    fileReader.onerror = () => reject(new Error('Error reading the selected file.'));
+                    fileReader.readAsDataURL(videoFile);
+                });
+            }
+
+            function audioBufferToWav(audioBuffer) {
+                let wavProgressStart = currentGlobalProgress > 50 ? currentGlobalProgress : 50;
+                updateProgress(wavProgressStart, 'Encoding to WAV...');
+                const numChannels = audioBuffer.numberOfChannels;
+                const sampleRate = audioBuffer.sampleRate;
+                const bitDepth = 16;
+                let result;
+                if (numChannels === 2) {
+                    const left = audioBuffer.getChannelData(0);
+                    const right = audioBuffer.getChannelData(1);
+                    result = new Float32Array(left.length * 2);
+                    for (let i = 0, j = 0; i < left.length; i++) {
+                        result[j++] = left[i];
+                        result[j++] = right[i];
+                    }
+                } else {
+                    result = audioBuffer.getChannelData(0);
+                }
+                updateProgress(wavProgressStart + ((100 - wavProgressStart) * 0.5), 'Formatting WAV data...');
+                const dataLength = result.length * (bitDepth / 8);
+                const buffer = new ArrayBuffer(44 + dataLength);
+                const view = new DataView(buffer);
+                function writeString(v, o, s) {
+                    for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i));
+                }
+                let offset = 0;
+                writeString(view, offset, 'RIFF');
+                offset += 4;
+                view.setUint32(offset, 36 + dataLength, true);
+                offset += 4;
+                writeString(view, offset, 'WAVE');
+                offset += 4;
+                writeString(view, offset, 'fmt ');
+                offset += 4;
+                view.setUint32(offset, 16, true);
+                offset += 4;
+                view.setUint16(offset, 1, true);
+                offset += 2;
+                view.setUint16(offset, numChannels, true);
+                offset += 2;
+                view.setUint32(offset, sampleRate, true);
+                offset += 4;
+                view.setUint32(offset, sampleRate * numChannels * (bitDepth / 8), true);
+                offset += 4;
+                view.setUint16(offset, numChannels * (bitDepth / 8), true);
+                offset += 2;
+                view.setUint16(offset, bitDepth, true);
+                offset += 2;
+                writeString(view, offset, 'data');
+                offset += 4;
+                view.setUint32(offset, dataLength, true);
+                offset += 4;
+                for (let i = 0; i < result.length; i++) {
+                    let s = Math.max(-1, Math.min(1, result[i]));
+                    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+                    offset += 2;
+                }
+                updateProgress(100, 'WAV encoding complete.');
+                return new Blob([view], { type: 'audio/wav' });
+            }
+
+            async function audioBufferToMp3(audioBuffer) {
+                if (typeof lamejs === 'undefined') throw new Error('LameJS library not found.');
+                let mp3ProgressStart = currentGlobalProgress > 50 ? currentGlobalProgress : 50;
+                updateProgress(mp3ProgressStart, 'Preparing for MP3 encoding...');
+                const numChannels = audioBuffer.numberOfChannels;
+                const sampleRate = audioBuffer.sampleRate;
+                const kbps = 128;
+                const pcmArrays = [];
+                for (let i = 0; i < numChannels; i++) {
+                    const f32 = audioBuffer.getChannelData(i);
+                    const i16 = new Int16Array(f32.length);
+                    for (let j = 0; j < f32.length; j++) {
+                        let s = Math.max(-1, Math.min(1, f32[j]));
+                        i16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+                    pcmArrays.push(i16);
+                }
+                const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, kbps);
+                const mp3Data = [];
+                const blockSize = 1152;
+                const totalSamples = pcmArrays[0].length;
+                const progressEncodingStartVal = mp3ProgressStart + 5;
+                updateProgress(progressEncodingStartVal, 'Starting MP3 block encoding...');
+                for (let i = 0; i < totalSamples; i += blockSize) {
+                    const lC = pcmArrays[0].subarray(i, i + blockSize);
+                    const rC = (numChannels === 2) ? pcmArrays[1].subarray(i, i + blockSize) : null;
+                    const buf = mp3encoder.encodeBuffer(lC, rC);
+                    if (buf.length > 0) mp3Data.push(buf);
+                    const encComp = (i / totalSamples);
+                    const overallProgress = progressEncodingStartVal + (encComp * (99 - progressEncodingStartVal));
+                    updateProgress(overallProgress, `Encoding MP3: ${Math.round(encComp * 100)}%`);
+                    if (i % (blockSize * 50) === 0) await yieldToEventLoop();
+                }
+                const buf = mp3encoder.flush();
+                if (buf.length > 0) mp3Data.push(buf);
+                updateProgress(100, 'MP3 encoding complete.');
+                return new Blob(mp3Data, { type: 'audio/mpeg' });
+            }
+
+            // --- Main Conversion Logic ---
+            async function handleConversion() {
+                if (!validateInputs()) return;
+                lastFocusedElementBeforeProcessing = document.activeElement;
+                currentGlobalProgress = 0;
+                mainWarningParagraph.classList.add('hidden');
+                convertToAudioBtn.disabled = true;
+                videoFileInput.disabled = true;
+                replaceFileBtn.disabled = true;
+                [playPausePreviewBtn, rewindPreviewBtn, forwardPreviewBtn, replayPreviewBtn].forEach(btn => btn.disabled = true);
+                uploadSection.classList.add('hidden');
+                uploadSection.setAttribute('aria-hidden', 'true');
+                processingSection.classList.remove('hidden');
+                processingSection.setAttribute('aria-hidden', 'false');
+                processingSection.setAttribute('aria-busy', 'true');
+                if (processingHeading) processingHeading.focus();
+                conversionProgress.value = 0;
+                conversionProgress.style.display = 'block';
+                updateProgress(0, 'Starting audio extraction process...');
+                targetFormat = getSelectedFormat();
+                const uploadedFile = videoFileInput.files[0];
+                let fileToProcess = uploadedFile;
+                if (uploadedFile && uploadedFile.name.toLowerCase().endsWith('.mkv')) {
+                    const originalMkvName = uploadedFile.name;
+                    const baseName = getFileNameWithoutExtension(originalMkvName);
+                    const tempMp4Name = baseName + '.mp4';
+                    try {
+                        fileToProcess = new File([uploadedFile], tempMp4Name, {
+                            type: 'video/mp4',
+                            lastModified: uploadedFile.lastModified
+                        });
+                    } catch (e) {
+                        console.error("Error creating new File object for MKV processing. Will attempt with original file.", e);
+                        fileToProcess = uploadedFile;
+                    }
+                }
+                convertedAudioBlob = null;
+                try {
+                    const audioBuffer = await extractAudioBuffer(fileToProcess);
+                    if (targetFormat === 'wav') {
+                        convertedAudioBlob = audioBufferToWav(audioBuffer);
+                    } else if (targetFormat === 'mp3') {
+                        convertedAudioBlob = await audioBufferToMp3(audioBuffer);
+                    } else {
+                        throw new Error(`Unsupported format: ${targetFormat}`);
+                    }
+                    displayResults();
+                } catch (error) {
+                    console.error("Conversion process encountered an error:", error);
+                    displayErrorState(error.message || "An unknown error occurred during conversion.");
+                } finally {
+                    videoFileInput.disabled = false;
+                    replaceFileBtn.disabled = false;
+                    [playPausePreviewBtn, rewindPreviewBtn, forwardPreviewBtn, replayPreviewBtn].forEach(btn => btn.disabled = false);
+                }
+            }
+
+            function displayResults() {
+                resultSection.classList.remove('hidden');
+                resultSection.setAttribute('aria-hidden', 'false');
+                if (resultHeading) resultHeading.focus();
+                uploadSection.classList.add('hidden');
+                processingSection.classList.add('hidden');
+                processingSection.setAttribute('aria-hidden', 'true');
+                processingSection.removeAttribute('aria-busy');
+                conversionProgress.style.display = 'none';
+                const audioFilename = `${originalFilenameWithoutExt}.${targetFormat}`;
+                generatedFilenameDisplay.textContent = audioFilename;
+                if (convertedAudioBlob) {
+                    downloadStatus.textContent = 'Your audio is ready! Your download should start automatically. If not, use the button below.';
+                    triggerDownload(convertedAudioBlob, audioFilename);
+                } else {
+                    downloadStatus.textContent = 'Conversion failed to produce audio data.';
+                }
+            }
+
+            function displayErrorState(errorMessage) {
+                uploadSection.classList.remove('hidden');
+                uploadSection.setAttribute('aria-hidden', 'false');
+                processingSection.classList.add('hidden');
+                processingSection.setAttribute('aria-hidden', 'true');
+                processingSection.removeAttribute('aria-busy');
+                resultSection.classList.add('hidden');
+                resultSection.setAttribute('aria-hidden', 'true');
+                fileError.textContent = errorMessage;
+                convertToAudioBtn.disabled = false;
+                videoFileInput.disabled = false;
+                replaceFileBtn.disabled = false;
+                mainWarningParagraph.classList.remove('hidden');
+                if (lastFocusedElementBeforeProcessing) {
+                    lastFocusedElementBeforeProcessing.focus();
+                }
+            }
+
+            function triggerDownload(blob, filename) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+            }
+
+            // --- Event Listeners ---
+            videoFileInput.addEventListener('change', (e) => {
+                fileError.textContent = '';
+                videoFileInput.removeAttribute('aria-invalid');
+                if (e.target.files && e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    if (!file.name.toLowerCase().match(/\.(mp4|mkv)$/)) {
+                        fileError.textContent = 'Please select a valid MP4 or MKV video file.';
+                        videoFileInput.setAttribute('aria-invalid', 'true');
+                        convertToAudioBtn.disabled = true;
+                        videoPreviewContainer.classList.add('hidden');
+                        return;
+                    }
+                    videoFileUploadGroup.classList.add('hidden');
+                    replaceFileBtn.classList.remove('hidden');
+                    setupAudioPreview(file);
+                }
+            });
+
+            replaceFileBtn.addEventListener('click', () => {
+                videoFileInput.value = '';
+                videoFileUploadGroup.classList.remove('hidden');
+                replaceFileBtn.classList.add('hidden');
+                videoPreviewContainer.classList.add('hidden');
+                convertToAudioBtn.disabled = true;
+                if (currentVideoObjectURL) {
+                    URL.revokeObjectURL(currentVideoObjectURL);
+                    currentVideoObjectURL = null;
+                }
+                audioPreviewPlayer.src = '';
+            });
+
+            playPausePreviewBtn.addEventListener('click', () => {
+                if (audioPreviewPlayer.paused) {
+                    audioPreviewPlayer.play().catch(() => {
+                        fileError.textContent = 'Unable to play preview. Please ensure the video has an audio track.';
+                    });
+                } else {
+                    audioPreviewPlayer.pause();
+                }
+            });
+
+            rewindPreviewBtn.addEventListener('click', () => {
+                audioPreviewPlayer.currentTime = Math.max(0, audioPreviewPlayer.currentTime - 10);
+            });
+
+            forwardPreviewBtn.addEventListener('click', () => {
+                audioPreviewPlayer.currentTime = Math.min(audioPreviewPlayer.duration, audioPreviewPlayer.currentTime + 10);
+            });
+
+            replayPreviewBtn.addEventListener('click', () => {
+                audioPreviewPlayer.currentTime = 0;
+                audioPreviewPlayer.play().catch(() => {
+                    fileError.textContent = 'Unable to replay preview. Please ensure the video has an audio track.';
+                });
+            });
+
+            convertToAudioBtn.addEventListener('click', handleConversion);
+
+            downloadAudioBtn.addEventListener('click', () => {
+                if (convertedAudioBlob) {
+                    triggerDownload(convertedAudioBlob, `${originalFilenameWithoutExt}.${targetFormat}`);
+                } else {
+                    downloadStatus.textContent = 'No audio file available for download.';
+                }
+            });
+
+            convertAnotherBtn.addEventListener('click', () => {
+                resultSection.classList.add('hidden');
+                resultSection.setAttribute('aria-hidden', 'true');
+                uploadSection.classList.remove('hidden');
+                uploadSection.setAttribute('aria-hidden', 'false');
+                videoFileInput.value = '';
+                videoFileUploadGroup.classList.remove('hidden');
+                replaceFileBtn.classList.add('hidden');
+                videoPreviewContainer.classList.add('hidden');
+                convertToAudioBtn.disabled = true;
+                if (currentVideoObjectURL) {
+                    URL.revokeObjectURL(currentVideoObjectURL);
+                    currentVideoObjectURL = null;
+                }
+                audioPreviewPlayer.src = '';
+                convertedAudioBlob = null;
+                if (lastFocusedElementBeforeProcessing) {
+                    lastFocusedElementBeforeProcessing.focus();
+                }
+            });
+
+            document.querySelectorAll('input[name="audioFormat"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    targetFormat = getSelectedFormat();
+                });
+            });
+
+            // --- Initialize ---
+            setupPreviewPlayerIcons();
+        });
+    </script>
+</body>
+</html>
